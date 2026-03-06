@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    container_name: auto_run_query
+    ports:
+      - "5090:5090"
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped
+    volumes:
+      - ./:/app/

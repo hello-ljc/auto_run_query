@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+openpyxl
+requests
+urllib3
+python-multipart

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Run Query — 批量问答工具</title>
+  <meta name="description" content="批量上传Excel问题，调用RAG/KAG API并以Markdown+LaTeX格式渲染结果" />
+
+  <!-- KaTeX -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
+  <!-- marked.js -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+
+  <!-- DOMPurify -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
+  <!-- SheetJS (client-side Excel export) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <div id="app">
+    <!-- ── Left sidebar: config panel ─────────────────────────────────── -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-icon">⚙</span>
+        <span class="sidebar-title">参数配置</span>
+        <button id="sidebarToggle" class="sidebar-toggle" title="收起">◀</button>
+      </div>
+
+      <div class="sidebar-body">
+        <!-- API URL -->
+        <div class="config-card">
+          <div class="config-card-header">接口设置</div>
+          <div class="config-items">
+            <div class="config-item col">
+              <label class="config-label">API URL</label>
+              <input id="apiUrl" class="text-input" type="text"
+                value="http://47.101.63.38:33908/api/v1/neo4j/test_query" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Instance IDs <span class="hint">（逗号分隔）</span></label>
+              <input id="instanceIds" class="text-input" type="text" placeholder="e.g. 707988ec-7e6a-4b0c-..." />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">LLM Config ID</label>
+              <input id="llmConfigId" class="text-input" type="number" value="8" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Analysis Prompt ID</label>
+              <input id="analysisPromptId" class="text-input" type="text" placeholder="UUID" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Result Generation Prompt ID</label>
+              <input id="resultGenerationPromptId" class="text-input" type="text" placeholder="UUID" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Switches -->
+        <div class="config-card">
+          <div class="config-card-header">检索开关</div>
+          <div class="config-items">
+            <div class="config-item row">
+              <label class="config-label">关键词检索</label>
+              <label class="switch"><input type="checkbox" id="useKeywords" checked /><span
+                  class="slider-track"></span></label>
+            </div>
+            <div class="config-item row">
+              <label class="config-label">RAG 检索</label>
+              <label class="switch"><input type="checkbox" id="useRag" checked /><span
+                  class="slider-track"></span></label>
+            </div>
+            <div class="config-item row">
+              <label class="config-label">图数据库检索</label>
+              <label class="switch"><input type="checkbox" id="useGraphRag" checked /><span
+                  class="slider-track"></span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Basic retrieval -->
+        <div class="config-card">
+          <div class="config-card-header">基础检索参数</div>
+          <div class="config-items">
+            <div class="config-item col">
+              <label class="config-label">检索 Top-K <span id="retrievalTopKVal" class="val-badge">10</span></label>
+              <input type="range" id="retrievalTopK" min="1" max="50" step="1" value="10" class="range-input" />
+            </div>
+            <div class="config-item col" id="keyRagWeightGroup">
+              <label class="config-label">关键词/RAG 权重 <span id="keyRagWeightVal" class="val-badge">5</span></label>
+              <input type="range" id="keyRagWeight" min="0" max="10" step="1" value="5" class="range-input" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Graph params (conditional) -->
+        <div class="config-card" id="graphParamsCard">
+          <div class="config-card-header">图检索参数</div>
+          <div class="config-items">
+            <div class="config-item col">
+              <label class="config-label">Max Paths <span id="maxPathsVal" class="val-badge">10</span></label>
+              <input type="range" id="maxPaths" min="1" max="15" step="1" value="10" class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Concept Top-K <span id="conceptTopKVal" class="val-badge">2</span></label>
+              <input type="range" id="conceptTopK" min="1" max="10" step="1" value="2" class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Concept Similarity <span id="conceptSimilarityVal"
+                  class="val-badge">0.80</span></label>
+              <input type="range" id="conceptSimilarity" min="0.1" max="1.0" step="0.01" value="0.8"
+                class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Max Hops <span id="maxHopsVal" class="val-badge">12</span></label>
+              <input type="range" id="maxHops" min="1" max="20" step="1" value="12" class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Max Visited <span id="maxVisitedVal" class="val-badge">100</span></label>
+              <input type="range" id="maxVisited" min="10" max="200" step="5" value="100" class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Score Limit <span id="scoreLimitVal" class="val-badge">0.35</span></label>
+              <input type="range" id="scoreLimit" min="0.1" max="1.0" step="0.05" value="0.35" class="range-input" />
+            </div>
+            <div class="config-item col">
+              <label class="config-label">Cut Limit <span id="cutLimitVal" class="val-badge">8</span></label>
+              <input type="range" id="cutLimit" min="1" max="20" step="1" value="8" class="range-input" />
+            </div>
+          </div>
+        </div>
+      </div><!-- /sidebar-body -->
+
+      <!-- Save config button pinned at sidebar bottom -->
+      <div class="sidebar-footer">
+        <button id="saveConfigBtn" class="save-config-btn">💾 保存配置</button>
+        <span id="saveConfigStatus" class="save-config-status"></span>
+      </div>
+    </aside>
+
+
+    <!-- ── Main area ─────────────────────────────────────────────────────── -->
+    <main id="main" class="main">
+      <!-- Header -->
+      <header class="topbar">
+        <button id="sidebarOpen" class="sidebar-open-btn hidden" title="展开配置">⚙ 配置</button>
+        <div class="topbar-title">
+          <span class="logo-icon">🔍</span>
+          <span>Auto Run Query</span>
+        </div>
+        <div class="topbar-right">
+          <span id="statusBadge" class="status-badge idle">就绪</span>
+        </div>
+      </header>
+
+      <!-- Upload area -->
+      <section class="upload-section">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-icon">📊</div>
+          <div class="drop-text">拖拽 Excel 文件至此，或<label for="fileInput" class="file-label">点击选择</label></div>
+          <div class="drop-hint">支持 .xlsx / .xls · 第一列为问题列表</div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden" />
+        </div>
+        <div id="fileInfo" class="file-info hidden">
+          <span class="file-icon">📄</span>
+          <span id="fileName" class="file-name"></span>
+          <button id="clearFile" class="clear-btn" title="移除文件">✕</button>
+        </div>
+
+        <div class="run-bar">
+          <button id="runBtn" class="run-btn" disabled>
+            <span class="run-icon">▶</span>
+            开始运行
+          </button>
+          <div id="progressWrap" class="progress-wrap hidden">
+            <div class="progress-track">
+              <div id="progressBar" class="progress-bar" style="width:0%"></div>
+            </div>
+            <span id="progressText" class="progress-text">0 / 0</span>
+          </div>
+          <button id="exportBtn" class="export-btn hidden" title="导出结果到 Excel">
+            <span>⬇</span> 导出 Excel
+          </button>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="results-section" id="resultsSection">
+        <div class="results-empty" id="resultsEmpty">
+          <div class="empty-icon">💬</div>
+          <div>上传 Excel 文件并运行后，结果将显示在此处</div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tab-bar hidden" id="tabBar">
+          <div class="tab-list" id="tabList"></div>
+        </div>
+
+        <!-- Tab panels -->
+        <div class="tab-panels hidden" id="tabPanels"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
