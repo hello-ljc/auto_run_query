@@ -121,11 +121,57 @@ const sidebarOpen = document.getElementById('sidebarOpen');
 
 sidebarToggle.addEventListener('click', () => {
     sidebar.classList.add('collapsed');
-    sidebarOpen.classList.remove('hidden');
 });
 sidebarOpen.addEventListener('click', () => {
     sidebar.classList.remove('collapsed');
-    sidebarOpen.classList.add('hidden');
+});
+
+// Re-translate dynamic content when language is switched
+document.addEventListener('langchange', () => {
+    applyI18n();
+    // Re-translate status badge only if it shows the idle text
+    if (statusBadge && statusBadge.classList.contains('idle')) {
+        statusBadge.textContent = t('statusIdle');
+    }
+});
+
+// ── Mode switch (batch / single) ──────────────────────────────────────────────
+const modeBatch = document.getElementById('modeBatch');
+const modeSingle = document.getElementById('modeSingle');
+const batchSection = document.getElementById('batchSection');
+const singleSection = document.getElementById('singleSection');
+const singleQuestion = document.getElementById('singleQuestion');
+const singleCharCount = document.getElementById('singleCharCount');
+const askBtn = document.getElementById('askBtn');
+const runBtn = document.getElementById('runBtn');
+
+let currentMode = 'batch'; // 'batch' | 'single'
+
+function setMode(mode) {
+    currentMode = mode;
+    const isSingle = mode === 'single';
+    modeBatch.classList.toggle('active', !isSingle);
+    modeSingle.classList.toggle('active', isSingle);
+    batchSection.classList.toggle('hidden', isSingle);
+    singleSection.classList.toggle('hidden', !isSingle);
+    runBtn.classList.toggle('hidden', isSingle);
+    askBtn.classList.toggle('hidden', !isSingle);
+    exportBtn.classList.add('hidden'); // reset export on mode change
+    if (isSingle) {
+        askBtn.disabled = singleQuestion.value.trim().length === 0;
+    } else {
+        runBtn.disabled = !selectedFile;
+    }
+}
+
+modeBatch.addEventListener('click', () => setMode('batch'));
+modeSingle.addEventListener('click', () => setMode('single'));
+
+// Char counter + enable/disable ask button
+singleQuestion.addEventListener('input', () => {
+    const len = singleQuestion.value.length;
+    singleCharCount.textContent = `${len} / 2000`;
+    askBtn.disabled = len === 0;
 });
 
 // ── File upload ───────────────────────────────────────────────────────────────
@@ -135,13 +181,13 @@ const fileInput = document.getElementById('fileInput');
 const fileInfo = document.getElementById('fileInfo');
 const fileNameEl = document.getElementById('fileName');
 const clearFileEl = document.getElementById('clearFile');
-const runBtn = document.getElementById('runBtn');
+
 
 function setFile(file) {
     if (!file) return;
     const allowed = ['.xlsx', '.xls'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) { alert('请上传 .xlsx 或 .xls 格式的 Excel 文件'); return; }
+    if (!allowed.includes(ext)) { alert(t('fileTypeAlert')); return; }
     selectedFile = file;
     fileNameEl.textContent = file.name;
     fileInfo.classList.remove('hidden');
@@ -250,7 +296,7 @@ function initTabs(questions) {
       <div class="panel-body" id="panelBody_${i}">
         <div class="panel-loading">
           <div class="spinner"></div>
-          <span>等待执行…</span>
+          <span>${t('tabWaiting')}</span>
         </div>
       </div>
     `;
@@ -277,7 +323,7 @@ function setTabLoading(idx) {
     if (body) body.innerHTML = `
     <div class="panel-loading">
       <div class="spinner"></div>
-      <span>正在请求中…</span>
+      <span>${t('tabLoading')}</span>
     </div>`;
     switchTab(idx);
 }
@@ -303,7 +349,7 @@ function setTabResult(idx, answer, isError) {
 function exportToExcel() {
     if (!allResults.length) return;
 
-    const rows = [['问题', '答案']];
+    const rows = [[t('exportColQuestion'), t('exportColAnswer')]];
     allResults.forEach(r => {
         if (r) rows.push([r.question, r.answer]);
     });
@@ -313,11 +359,11 @@ function exportToExcel() {
 
     // Auto column widths (rough estimate)
     ws['!cols'] = [
-        { wch: 40 },   // 问题
-        { wch: 120 },  // 答案
+        { wch: 40 },   // question
+        { wch: 120 },  // answer
     ];
 
-    XLSX.utils.book_append_sheet(wb, ws, '查询结果');
+    XLSX.utils.book_append_sheet(wb, ws, t('exportSheetName'));
     const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
     XLSX.writeFile(wb, `query_results_${ts}.xlsx`);
 }
@@ -351,7 +397,7 @@ runBtn.addEventListener('click', async () => {
     if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
 
     const config = buildConfig();
-    setStatus('running', '运行中…');
+    setStatus('running', t('statusRunning'));
     runBtn.disabled = true;
     progressWrap.classList.remove('hidden');
     updateProgress(0, 0);
@@ -369,8 +415,8 @@ runBtn.addEventListener('click', async () => {
 
         if (!resp.ok) {
             const err = await resp.json().catch(() => ({ error: resp.statusText }));
-            alert('错误：' + (err.error || resp.statusText));
-            setStatus('error', '错误');
+            alert(t('apiErrorAlert') + (err.error || resp.statusText));
+            setStatus('error', t('statusError'));
             runBtn.disabled = false;
             return;
         }
@@ -398,7 +444,7 @@ runBtn.addEventListener('click', async () => {
                 updateProgress(doneQ, totalQ);
                 setTabResult(msg.index, msg.answer, msg.status === 'error');
             } else if (msg.type === 'done') {
-                setStatus('done', `完成 ${doneQ}/${totalQ}`);
+                setStatus('done', `${t('statusDone')} ${doneQ}/${totalQ}`);
                 runBtn.disabled = false;
                 exportBtn.classList.remove('hidden');  // show export button
             }
@@ -425,9 +471,89 @@ runBtn.addEventListener('click', async () => {
 
     } catch (err) {
         console.error(err);
-        setStatus('error', '请求失败');
-        alert('请求失败：' + err.message);
+        setStatus('error', t('statusError'));
+        alert(t('requestFailedAlert') + err.message);
         runBtn.disabled = false;
+    }
+});
+
+// ── Single-question ask handler ────────────────────────────────────────────────
+askBtn.addEventListener('click', async () => {
+    const question = singleQuestion.value.trim();
+    if (!question) return;
+
+    askBtn.disabled = true;
+    exportBtn.classList.add('hidden');
+    progressWrap.classList.remove('hidden');
+    updateProgress(0, 1);
+    setStatus('running', t('statusRunning'));
+
+    const config = buildConfig();
+    let doneQ = 0, totalQ = 1;
+
+    const processLine = (line) => {
+        if (!line.startsWith('data:')) return;
+        const dataStr = line.slice(5).trim();
+        if (!dataStr) return;
+        let msg;
+        try { msg = JSON.parse(dataStr); } catch { return; }
+
+        if (msg.type === 'init') {
+            initTabs(msg.questions);
+        } else if (msg.type === 'start') {
+            setTabLoading(msg.index);
+        } else if (msg.type === 'result') {
+            doneQ++;
+            updateProgress(doneQ, totalQ);
+            setTabResult(msg.index, msg.answer, msg.status === 'error');
+        } else if (msg.type === 'done') {
+            setStatus('done', `${t('statusDone')} 1/1`);
+            askBtn.disabled = false;
+            exportBtn.classList.remove('hidden');
+        }
+    };
+
+    try {
+        const resp = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question,
+                apiUrl: config.apiUrl,
+                kagConfig: config.kagConfig,
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+            alert(t('apiErrorAlert') + (err.detail || resp.statusText));
+            setStatus('error', t('statusError'));
+            askBtn.disabled = false;
+            return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+            for (const part of parts) {
+                for (const line of part.split('\n')) processLine(line);
+            }
+        }
+        if (buffer) {
+            for (const line of buffer.split('\n')) processLine(line);
+        }
+    } catch (err) {
+        console.error(err);
+        setStatus('error', t('statusError'));
+        alert(t('requestFailedAlert') + err.message);
+        askBtn.disabled = false;
     }
 });
 
@@ -516,10 +642,10 @@ async function saveConfig() {
             body: JSON.stringify(collectConfig()),
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        showSaveStatus(true, '✓ 已保存');
+        showSaveStatus(true, t('saveOk'));
     } catch (e) {
         console.error('[config] Save failed:', e);
-        showSaveStatus(false, '✗ 保存失败');
+        showSaveStatus(false, t('saveErr'));
     } finally {
         saveConfigBtn.disabled = false;
     }

@@ -96,6 +96,44 @@ async def save_config(config: dict):
         raise HTTPException(status_code=500, detail=f"Failed to save config: {exc}")
 
 
+# ── Single-question endpoint ───────────────────────────────────────────────────
+@app.post("/api/ask")
+async def ask_single(body: dict):
+    """
+    Accepts JSON: { question, apiUrl?, kagConfig? }
+    Returns the same SSE event format as /api/run-stream (init→start→result→done)
+    so the frontend can reuse identical event-handling logic.
+    """
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+    api_url = body.get("apiUrl", DEFAULT_API_URL)
+    kag_config = body.get("kagConfig", {})
+
+    logger.info("[ASK] Single question | question=%r | url=%s", question[:60], api_url)
+
+    def sse(data: dict) -> str:
+        return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    async def generate():
+        yield sse({"type": "init", "total": 1, "questions": [question]})
+        yield sse({"type": "start", "index": 0, "question": question})
+        try:
+            answer = await asyncio.to_thread(call_external_api, question, kag_config, api_url)
+            logger.info("[ASK] Done | answer_len=%d", len(answer))
+            yield sse({"type": "result", "index": 0, "question": question,
+                       "answer": answer, "status": "success"})
+        except Exception as exc:
+            logger.error("[ASK] Error | %s", exc)
+            yield sse({"type": "result", "index": 0, "question": question,
+                       "answer": f"**Error:** {exc}", "status": "error"})
+        yield sse({"type": "done"})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

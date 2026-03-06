@@ -21,23 +21,26 @@
   <!-- SheetJS (client-side Excel export) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <!-- i18n (must be before app.js) -->
+  <script src="/static/i18n.js"></script>
+
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 
 <body>
   <div id="app">
     <!-- ── Left sidebar: config panel ─────────────────────────────────── -->
-    <aside id="sidebar" class="sidebar">
+    <aside id="sidebar" class="sidebar collapsed">
       <div class="sidebar-header">
         <span class="sidebar-icon">⚙</span>
-        <span class="sidebar-title">参数配置</span>
-        <button id="sidebarToggle" class="sidebar-toggle" title="收起">◀</button>
+        <span class="sidebar-title" data-i18n="sidebarTitle">参数配置</span>
+        <button id="sidebarToggle" class="sidebar-toggle" data-i18n-title="sidebarCollapseTitle" title="收起">◀</button>
       </div>
 
       <div class="sidebar-body">
         <!-- API URL -->
         <div class="config-card">
-          <div class="config-card-header">接口设置</div>
+          <div class="config-card-header" data-i18n="apiSettingsHeader">接口设置</div>
           <div class="config-items">
             <div class="config-item col">
               <label class="config-label">API URL</label>
@@ -45,8 +48,10 @@
                 value="http://47.101.63.38:33908/api/v1/neo4j/test_query" />
             </div>
             <div class="config-item col">
-              <label class="config-label">Instance IDs <span class="hint">（逗号分隔）</span></label>
-              <input id="instanceIds" class="text-input" type="text" placeholder="e.g. 707988ec-7e6a-4b0c-..." />
+              <label class="config-label">Instance IDs <span class="hint"
+                  data-i18n="instanceIdsHint">（逗号分隔）</span></label>
+              <input id="instanceIds" class="text-input" type="text" data-i18n-placeholder="instanceIdsPlaceholder"
+                placeholder="e.g. 707988ec-7e6a-4b0c-..." />
             </div>
             <div class="config-item col">
               <label class="config-label">LLM Config ID</label>
@@ -65,20 +70,20 @@
 
         <!-- Switches -->
         <div class="config-card">
-          <div class="config-card-header">检索开关</div>
+          <div class="config-card-header" data-i18n="searchSwitchesHeader">检索开关</div>
           <div class="config-items">
             <div class="config-item row">
-              <label class="config-label">关键词检索</label>
+              <label class="config-label" data-i18n="useKeywordsLabel">关键词检索</label>
               <label class="switch"><input type="checkbox" id="useKeywords" checked /><span
                   class="slider-track"></span></label>
             </div>
             <div class="config-item row">
-              <label class="config-label">RAG 检索</label>
+              <label class="config-label" data-i18n="useRagLabel">RAG 检索</label>
               <label class="switch"><input type="checkbox" id="useRag" checked /><span
                   class="slider-track"></span></label>
             </div>
             <div class="config-item row">
-              <label class="config-label">图数据库检索</label>
+              <label class="config-label" data-i18n="useGraphRagLabel">图数据库检索</label>
               <label class="switch"><input type="checkbox" id="useGraphRag" checked /><span
                   class="slider-track"></span></label>
             </div>
@@ -87,14 +92,16 @@
 
         <!-- Basic retrieval -->
         <div class="config-card">
-          <div class="config-card-header">基础检索参数</div>
+          <div class="config-card-header" data-i18n="basicParamsHeader">基础检索参数</div>
           <div class="config-items">
             <div class="config-item col">
-              <label class="config-label">检索 Top-K <span id="retrievalTopKVal" class="val-badge">10</span></label>
+              <label class="config-label"><span data-i18n="retrievalTopKLabel">检索 Top-K</span> <span
+                  id="retrievalTopKVal" class="val-badge">10</span></label>
               <input type="range" id="retrievalTopK" min="1" max="50" step="1" value="10" class="range-input" />
             </div>
             <div class="config-item col" id="keyRagWeightGroup">
-              <label class="config-label">关键词/RAG 权重 <span id="keyRagWeightVal" class="val-badge">5</span></label>
+              <label class="config-label"><span data-i18n="keyRagWeightLabel">关键词/RAG 权重</span> <span
+                  id="keyRagWeightVal" class="val-badge">5</span></label>
               <input type="range" id="keyRagWeight" min="0" max="10" step="1" value="5" class="range-input" />
             </div>
           </div>
@@ -102,7 +109,7 @@
 
         <!-- Graph params (conditional) -->
         <div class="config-card" id="graphParamsCard">
-          <div class="config-card-header">图检索参数</div>
+          <div class="config-card-header" data-i18n="graphParamsHeader">图检索参数</div>
           <div class="config-items">
             <div class="config-item col">
               <label class="config-label">Max Paths <span id="maxPathsVal" class="val-badge">10</span></label>
@@ -140,7 +147,7 @@
 
       <!-- Save config button pinned at sidebar bottom -->
       <div class="sidebar-footer">
-        <button id="saveConfigBtn" class="save-config-btn">💾 保存配置</button>
+        <button id="saveConfigBtn" class="save-config-btn" data-i18n="saveConfigBtn">💾 保存配置</button>
         <span id="saveConfigStatus" class="save-config-status"></span>
       </div>
     </aside>
@@ -150,34 +157,60 @@
     <main id="main" class="main">
       <!-- Header -->
       <header class="topbar">
-        <button id="sidebarOpen" class="sidebar-open-btn hidden" title="展开配置">⚙ 配置</button>
+        <button id="sidebarOpen" class="sidebar-open-btn" data-i18n="sidebarOpenBtn">⚙ 配置</button>
         <div class="topbar-title">
           <span class="logo-icon">🔍</span>
-          <span>Auto Run Query</span>
+          <span data-i18n="appTitle">Auto Run Query</span>
         </div>
         <div class="topbar-right">
-          <span id="statusBadge" class="status-badge idle">就绪</span>
+          <button id="langBtn" class="lang-btn" onclick="switchLang()" data-i18n="langBtn">EN</button>
+          <span id="statusBadge" class="status-badge idle" data-i18n="statusIdle">就绪</span>
         </div>
       </header>
 
       <!-- Upload area -->
       <section class="upload-section">
-        <div id="dropZone" class="drop-zone">
-          <div class="drop-icon">📊</div>
-          <div class="drop-text">拖拽 Excel 文件至此，或<label for="fileInput" class="file-label">点击选择</label></div>
-          <div class="drop-hint">支持 .xlsx / .xls · 第一列为问题列表</div>
-          <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden" />
-        </div>
-        <div id="fileInfo" class="file-info hidden">
-          <span class="file-icon">📄</span>
-          <span id="fileName" class="file-name"></span>
-          <button id="clearFile" class="clear-btn" title="移除文件">✕</button>
+
+        <!-- Mode switch -->
+        <div class="mode-switch" role="tablist">
+          <button id="modeBatch" class="mode-btn active" role="tab" data-i18n="modeBatch">📊 批量上传</button>
+          <button id="modeSingle" class="mode-btn" role="tab" data-i18n="modeSingle">💬 单次提问</button>
         </div>
 
+        <!-- Batch upload -->
+        <div id="batchSection">
+          <div id="dropZone" class="drop-zone">
+            <div class="drop-icon">📊</div>
+            <div class="drop-text"><span data-i18n="dropText">拖拽 Excel 文件至此，或</span><label for="fileInput"
+                class="file-label" data-i18n="dropClickLabel">点击选择</label></div>
+            <div class="drop-hint" data-i18n="dropHint">支持 .xlsx / .xls · 第一列为问题列表</div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden" />
+          </div>
+          <div id="fileInfo" class="file-info hidden">
+            <span class="file-icon">📄</span>
+            <span id="fileName" class="file-name"></span>
+            <button id="clearFile" class="clear-btn" title="✕">✕</button>
+          </div>
+        </div>
+
+        <!-- Single question -->
+        <div id="singleSection" class="single-section hidden">
+          <textarea id="singleQuestion" class="single-textarea" data-i18n-placeholder="singlePlaceholder"
+            placeholder="请输入你的问题…" maxlength="2000"></textarea>
+          <div class="single-meta">
+            <span id="singleCharCount" class="char-count">0 / 2000</span>
+          </div>
+        </div>
+
+        <!-- Shared run bar -->
         <div class="run-bar">
           <button id="runBtn" class="run-btn" disabled>
             <span class="run-icon">▶</span>
-            开始运行
+            <span data-i18n="runBtn">开始运行</span>
+          </button>
+          <button id="askBtn" class="ask-btn hidden">
+            <span>💬</span>
+            <span data-i18n="askBtn">提问</span>
           </button>
           <div id="progressWrap" class="progress-wrap hidden">
             <div class="progress-track">
@@ -185,17 +218,16 @@
             </div>
             <span id="progressText" class="progress-text">0 / 0</span>
           </div>
-          <button id="exportBtn" class="export-btn hidden" title="导出结果到 Excel">
-            <span>⬇</span> 导出 Excel
-          </button>
+          <button id="exportBtn" class="export-btn hidden" data-i18n="exportBtn">⬇ 导出 Excel</button>
         </div>
       </section>
+
 
       <!-- Results -->
       <section class="results-section" id="resultsSection">
         <div class="results-empty" id="resultsEmpty">
           <div class="empty-icon">💬</div>
-          <div>上传 Excel 文件并运行后，结果将显示在此处</div>
+          <div data-i18n="emptyResults">上传 Excel 文件并运行后，结果将显示在此处</div>
         </div>
 
         <!-- Tab bar -->
@@ -210,6 +242,10 @@
   </div>
 
   <script src="/static/app.js"></script>
+  <script>
+    // Apply i18n translations after DOM + app.js are ready
+    applyI18n();
+  </script>
 </body>
 
 </html>
